@@ -1,0 +1,8 @@
+services:
+  - type: worker
+    name: postbot
+    runtime: docker          # use the Dockerfile in repo root
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false          # set this manually in Render → Environment

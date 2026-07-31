@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pythonlibs/
+.venv/
+*.egg-info/
+
+# SQLite database (runtime data — never commit)
+*.db
+*.sqlite
+*.sqlite3
+
+# Node / pnpm
+node_modules/
+.pnpm-store/
+
+# Environment
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Replit internals
+.local/
+.upm/
+
+# Temp / build artefacts
+extracted_bot/
+attached_assets/
+updated_postbot.zip
+dist/
+build/

@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+dist/
+build/
+*.whl
+.venv/
+.pythonlibs/
+
+# Database (never bake data into image)
+*.db
+*.sqlite
+*.sqlite3
+
+# Node / pnpm (monorepo artefacts not needed in Docker image)
+node_modules/
+.pnpm-store/
+artifacts/
+lib/
+scripts/
+
+# Dev / editor
+.env
+.env.*
+*.log
+.DS_Store
+.idea/
+.vscode/
+
+# Git
+.git/
+.gitignore
+
+# Replit
+.replit
+replit.nix
+.local/
+extracted_bot/
+attached_assets/
+updated_postbot.zip

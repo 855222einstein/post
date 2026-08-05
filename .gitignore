@@ -1,36 +1,40 @@
+# Environment & secrets — never commit
+.env
+*.env
+
 # Python
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
 *.pyd
-.pythonlibs/
-.venv/
+.Python
 *.egg-info/
+dist/
+build/
+*.egg
+.eggs/
 
-# SQLite database (runtime data — never commit)
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Database files
+data/
 *.db
-*.sqlite
 *.sqlite3
 
-# Node / pnpm
-node_modules/
-.pnpm-store/
-
-# Environment
-.env
-.env.*
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Replit internals
-.local/
-.upm/
-
-# Temp / build artefacts
-extracted_bot/
-attached_assets/
-updated_postbot.zip
-dist/
-build/
+# Logs
+*.log
+logs/

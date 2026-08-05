@@ -1,28 +1,19 @@
-# ── Build stage ────────────────────────────────────────────────────────────────
-FROM python:3.11-slim AS builder
-
-WORKDIR /app
-
-# Install dependencies into a local prefix so they're easy to copy
-COPY requirements.txt .
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
-
-
-# ── Runtime stage ──────────────────────────────────────────────────────────────
 FROM python:3.11-slim
 
+# Don't write .pyc files; send logs straight to stdout
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
-# Copy installed packages from builder
-COPY --from=builder /install /usr/local
-
-# Copy bot source
-COPY bot/ ./bot/
+# Install dependencies first (Docker cache layer)
 COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Non-root user for security
-RUN useradd -m botuser && chown -R botuser:botuser /app
-USER botuser
+# Copy source
+COPY . .
 
-# Telegram bot runs as a long-polling background worker — no port needed
+# Create the data directory for the SQLite database
+RUN mkdir -p data
+
 CMD ["python", "-m", "bot.main"]

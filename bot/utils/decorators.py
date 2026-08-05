@@ -29,6 +29,27 @@ def admin_only(func):
     return wrapper
 
 
+def admin_or_sudo(func):
+    """
+    Decorator that allows both admins (from ADMIN_IDS env) and sudo users
+    (stored in the bot settings DB) to use the handler.
+    """
+    @functools.wraps(func)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        from bot.database.db import is_admin_or_sudo
+        user = update.effective_user
+        if not user:
+            return
+        if not await is_admin_or_sudo(user.id):
+            await update.effective_message.reply_text(
+                "⛔ You are not authorised to use this command."
+            )
+            return
+        return await func(update, context)
+
+    return wrapper
+
+
 def private_chat_only(func):
     """Decorator that ensures the handler only runs in private chats."""
     @functools.wraps(func)

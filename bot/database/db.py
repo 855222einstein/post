@@ -145,6 +145,24 @@ async def list_destinations() -> list[dict]:
         return [dict(row) for row in rows]
 
 
+# ── sudo helpers ──────────────────────────────────────────────────────────────
+
+async def get_sudo_ids() -> list[int]:
+    """Return the list of user IDs that have sudo (premium) access."""
+    raw = await get_setting("sudo", scope="bot")
+    if not raw:
+        return []
+    return [int(x.strip()) for x in raw.split(",") if x.strip().isdigit()]
+
+
+async def is_admin_or_sudo(user_id: int) -> bool:
+    """Return True if user_id is a configured admin or a sudo user."""
+    from bot.config import ADMIN_IDS
+    if not ADMIN_IDS or user_id in ADMIN_IDS:
+        return True
+    return user_id in await get_sudo_ids()
+
+
 # ── forwarded_messages helpers ────────────────────────────────────────────────
 
 async def log_forward(

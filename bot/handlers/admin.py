@@ -136,10 +136,10 @@ async def broadcast_message_handler(
         [
             [
                 InlineKeyboardButton(
-                    "Forward",
+                    "ꜰᴏʀᴡᴀʀᴅ",
                     callback_data=f"fwd:{update.effective_chat.id}:{update.message.message_id}",
                 ),
-                InlineKeyboardButton("Cancel", callback_data="cancel"),
+                InlineKeyboardButton("ᴄᴀɴᴄᴇʟ", callback_data="cancel"),
             ]
         ]
     )

@@ -24,21 +24,22 @@ Flow
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
-from bot.database.db import get_setting, set_setting, reset_setting
-from bot.utils.decorators import admin_only, private_chat_only
+from bot.database.db import get_setting, set_setting, reset_setting, is_admin_or_sudo
+from bot.utils.decorators import admin_only, admin_or_sudo, private_chat_only
 
 # ── Setting definitions ───────────────────────────────────────────────────────
 
 BOT_FIELDS: list[dict] = [
-    {"key": "log_channel",  "label": "Log Channel",  "hint": "Send the channel ID (e.g. -1001234567890)"},
-    {"key": "force_sub",    "label": "Force Sub",    "hint": "Send the channel username or ID users must join"},
-    {"key": "cookies",      "label": "Cookies",      "hint": "Send the cookie string"},
+    {"key": "log_channel",   "label": "ʟᴏɢ ᴄʜᴀɴɴᴇʟ",   "hint": "Send the channel ID (e.g. -1001234567890)"},
+    {"key": "force_sub",     "label": "ꜰᴏʀᴄᴇ sᴜʙ",     "hint": "Send the channel username or ID users must join"},
+    {"key": "news_channel",  "label": "ɴᴇᴡs ᴄʜᴀɴɴᴇʟ",  "hint": "Send the news channel username or URL (e.g. @yourchannel or https://t.me/yourchannel)"},
+    {"key": "sudo",          "label": "sᴜᴅᴏ",           "hint": "Send user IDs to grant sudo access, separated by commas (e.g. 123456789,987654321)"},
 ]
 
 USER_FIELDS: list[dict] = [
-    {"key": "language",      "label": "Language",       "hint": "Send your preferred language (e.g. English)"},
-    {"key": "notifications", "label": "Notifications",  "hint": "Send 'on' or 'off'"},
-    {"key": "forward_mode",  "label": "Forward Mode",   "hint": "Send 'copy' (no tag) or 'forward' (shows source)"},
+    {"key": "language",      "label": "ʟᴀɴɢᴜᴀɢᴇ",       "hint": "Send your preferred language (e.g. English)"},
+    {"key": "notifications", "label": "ɴᴏᴛɪꜰɪᴄᴀᴛɪᴏɴs",  "hint": "Send 'on' or 'off'"},
+    {"key": "forward_mode",  "label": "ꜰᴏʀᴡᴀʀᴅ ᴍᴏᴅᴇ",   "hint": "Send 'copy' (no tag) or 'forward' (shows source)"},
 ]
 
 _AWAIT_KEY = "awaiting_setting"
@@ -72,28 +73,35 @@ async def _user_settings_text(user_id: int) -> str:
 
 def _bot_settings_keyboard() -> InlineKeyboardMarkup:
     rows = [[InlineKeyboardButton(f["label"], callback_data=f"bs:field:{f['key']}")] for f in BOT_FIELDS]
-    rows.append([InlineKeyboardButton("Close", callback_data="bs:close")])
+    rows.append([InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="bs:close")])
     return InlineKeyboardMarkup(rows)
 
 
 def _user_settings_keyboard() -> InlineKeyboardMarkup:
     rows = [[InlineKeyboardButton(f["label"], callback_data=f"us:field:{f['key']}")] for f in USER_FIELDS]
-    rows.append([InlineKeyboardButton("Close", callback_data="us:close")])
+    rows.append([InlineKeyboardButton("ᴄʟᴏsᴇ", callback_data="us:close")])
     return InlineKeyboardMarkup(rows)
 
 
 def _field_keyboard(scope_prefix: str, field_key: str, field_label: str) -> InlineKeyboardMarkup:
     """Keyboard shown after tapping a field — Set / Reset / Back, all in the same message."""
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(f"Set {field_label}",   callback_data=f"{scope_prefix}:set:{field_key}")],
-        [InlineKeyboardButton(f"Reset {field_label}", callback_data=f"{scope_prefix}:reset:{field_key}")],
-        [InlineKeyboardButton("Back",                 callback_data=f"{scope_prefix}:back")],
+        [InlineKeyboardButton(f"sᴇᴛ {field_label}",   callback_data=f"{scope_prefix}:set:{field_key}")],
+        [InlineKeyboardButton(f"ʀᴇsᴇᴛ {field_label}", callback_data=f"{scope_prefix}:reset:{field_key}")],
+        [InlineKeyboardButton("ʙᴀᴄᴋ",                 callback_data=f"{scope_prefix}:back")],
+    ])
+
+
+def _input_cancel_keyboard(scope_prefix: str) -> InlineKeyboardMarkup:
+    """Keyboard shown while waiting for user input — just a Cancel button."""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("ᴄᴀɴᴄᴇʟ", callback_data=f"{scope_prefix}:cancel_input")],
     ])
 
 
 # ── Commands ──────────────────────────────────────────────────────────────────
 
-@admin_only
+@admin_or_sudo
 @private_chat_only
 async def botsettings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = await _bot_settings_text(update.effective_user.id)
@@ -113,6 +121,11 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     await query.answer()
     data: str = query.data or ""
     user_id = update.effective_user.id
+
+    # ── Bot settings — sudo/admin gate ────────────────────────────────────────
+    if data.startswith("bs:") and not await is_admin_or_sudo(user_id):
+        await query.answer("⛔ You are not authorised.", show_alert=True)
+        return
 
     # ── Bot settings ──────────────────────────────────────────────────────────
 
@@ -136,18 +149,25 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         if not field:
             return
         context.user_data[_AWAIT_KEY] = {
-            "scope":   "bot",
-            "key":     key,
-            "label":   field["label"],
-            "menu":    "bs",
-            "msg_id":  query.message.message_id,
-            "chat_id": query.message.chat.id,
+            "scope":     "bot",
+            "key":       key,
+            "field_key": key,
+            "label":     field["label"],
+            "menu":      "bs",
+            "msg_id":    query.message.message_id,
+            "chat_id":   query.message.chat.id,
         }
-        # Edit text to ask for value (same bubble)
-        await query.edit_message_text(
-            f"*{field['label']}*\n\n{field['hint']}\n\nSend your value now, or /cancel to abort.",
-            parse_mode="Markdown",
-        )
+        # Keyboard-only swap — text unchanged, bubble shape preserved
+        await query.edit_message_reply_markup(reply_markup=_input_cancel_keyboard("bs"))
+
+    elif data == "bs:cancel_input":
+        state = context.user_data.pop(_AWAIT_KEY, None)
+        fkey = state["field_key"] if state else None
+        flabel = state["label"] if state else None
+        if fkey and flabel:
+            await query.edit_message_reply_markup(reply_markup=_field_keyboard("bs", fkey, flabel))
+        else:
+            await query.edit_message_reply_markup(reply_markup=_bot_settings_keyboard())
 
     elif data.startswith("bs:reset:"):
         key = data[len("bs:reset:"):]
@@ -189,18 +209,25 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         if not field:
             return
         context.user_data[_AWAIT_KEY] = {
-            "scope":   f"user:{user_id}",
-            "key":     key,
-            "label":   field["label"],
-            "menu":    "us",
-            "msg_id":  query.message.message_id,
-            "chat_id": query.message.chat.id,
+            "scope":     f"user:{user_id}",
+            "key":       key,
+            "field_key": key,
+            "label":     field["label"],
+            "menu":      "us",
+            "msg_id":    query.message.message_id,
+            "chat_id":   query.message.chat.id,
         }
-        # Edit text to ask for value (same bubble)
-        await query.edit_message_text(
-            f"*{field['label']}*\n\n{field['hint']}\n\nSend your value now, or /cancel to abort.",
-            parse_mode="Markdown",
-        )
+        # Keyboard-only swap — text unchanged, bubble shape preserved
+        await query.edit_message_reply_markup(reply_markup=_input_cancel_keyboard("us"))
+
+    elif data == "us:cancel_input":
+        state = context.user_data.pop(_AWAIT_KEY, None)
+        fkey = state["field_key"] if state else None
+        flabel = state["label"] if state else None
+        if fkey and flabel:
+            await query.edit_message_reply_markup(reply_markup=_field_keyboard("us", fkey, flabel))
+        else:
+            await query.edit_message_reply_markup(reply_markup=_user_settings_keyboard())
 
     elif data.startswith("us:reset:"):
         key = data[len("us:reset:"):]

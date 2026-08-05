@@ -4,13 +4,34 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from bot.utils.decorators import private_chat_only
+from bot.database.db import get_setting
 
-WELCOME_TEXT = (
-    "Hey there\\! My name is *Himawari Nohara* \\- I'm here to help you manage your groups\\! "
-    "Use /help to find out how to use me to my full potential\\.\n\n"
-    "Join my [news channel](https://t.me/your_news_channel) to get information on all the latest updates\\.\n\n"
-    "Check /privacy to view the privacy policy, and interact with your data\\."
-)
+import re
+
+
+def _escape_md(text: str) -> str:
+    """Escape special chars for MarkdownV2."""
+    return re.sub(r'([_*\[\]()~`>#+\-=|{}.!\\])', r'\\\1', text)
+
+
+def _build_welcome_text(news_url: str | None) -> str:
+    if news_url:
+        # Normalise @username → URL
+        if news_url.startswith("@"):
+            news_url = f"https://t.me/{news_url[1:]}"
+        elif not news_url.startswith("http"):
+            news_url = f"https://t.me/{news_url}"
+        channel_part = f"Join my [news channel]({news_url}) to get information on all the latest updates\\."
+    else:
+        channel_part = "Join my news channel to get information on all the latest updates\\."
+
+    return (
+        "Hey there\\! My name is *Himawari Nohara* \\- I'm here to help you manage your groups\\! "
+        "Use /help to find out how to use me to my full potential\\.\n\n"
+        f"{channel_part}\n\n"
+        "Check /privacy to view the privacy policy, and interact with your data\\."
+    )
+
 
 HELP_TEXT = """
 *Post Forward Bot — Help*
@@ -41,18 +62,24 @@ PRIVACY_TEXT = (
 )
 
 
-def _start_keyboard() -> InlineKeyboardMarkup:
+def _start_keyboard(bot_username: str, user_id: int) -> InlineKeyboardMarkup:
+    deep_link = f"https://t.me/{bot_username}?start={user_id}"
+    share_url  = f"https://t.me/share/url?url={deep_link}"
     return InlineKeyboardMarkup(
-        [[InlineKeyboardButton("ADD ME IN YOUR GROUP", url="https://t.me/your_bot_username?startgroup=true")]]
+        [[InlineKeyboardButton("sʜᴀʀᴇ", url=share_url)]]
     )
 
 
 @private_chat_only
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    news_url = await get_setting("news_channel", scope="bot")
+    welcome_text = _build_welcome_text(news_url)
+    bot_username = (await context.bot.get_me()).username
+    user_id = update.effective_user.id
     await update.message.reply_text(
-        WELCOME_TEXT,
+        welcome_text,
         parse_mode="MarkdownV2",
-        reply_markup=_start_keyboard(),
+        reply_markup=_start_keyboard(bot_username, user_id),
         disable_web_page_preview=True,
     )
 

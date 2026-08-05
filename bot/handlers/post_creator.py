@@ -76,9 +76,9 @@ def _parse_buttons(text: str) -> InlineKeyboardMarkup | None:
 
 def _confirm_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[
-        InlineKeyboardButton("Post",   callback_data="np:confirm"),
-        InlineKeyboardButton("Edit",   callback_data="np:edit"),
-        InlineKeyboardButton("Cancel", callback_data="np:cancel"),
+        InlineKeyboardButton("ᴘᴏsᴛ",   callback_data="np:confirm"),
+        InlineKeyboardButton("ᴇᴅɪᴛ",   callback_data="np:edit"),
+        InlineKeyboardButton("ᴄᴀɴᴄᴇʟ", callback_data="np:cancel"),
     ]])
 
 

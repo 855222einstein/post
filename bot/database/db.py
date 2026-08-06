@@ -66,6 +66,20 @@ async def init_db() -> None:
             )
             """
         )
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_posts (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id         INTEGER NOT NULL,
+                short_id        TEXT    NOT NULL UNIQUE,
+                text            TEXT,
+                photo_file_id   TEXT,
+                sticker_file_id TEXT,
+                buttons_raw     TEXT,
+                created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """
+        )
         await db.commit()
 
 
@@ -161,6 +175,52 @@ async def is_admin_or_sudo(user_id: int) -> bool:
     if not ADMIN_IDS or user_id in ADMIN_IDS:
         return True
     return user_id in await get_sudo_ids()
+
+
+# ── user_posts helpers ────────────────────────────────────────────────────────
+
+async def save_post(
+    user_id: int,
+    short_id: str,
+    text: str | None,
+    photo_file_id: str | None,
+    sticker_file_id: str | None,
+    buttons_raw: str | None,
+) -> int:
+    """Insert a new user post and return its row id."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute(
+            """
+            INSERT INTO user_posts (user_id, short_id, text, photo_file_id, sticker_file_id, buttons_raw)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (user_id, short_id, text or None, photo_file_id, sticker_file_id, buttons_raw or None),
+        )
+        await db.commit()
+        return cursor.lastrowid
+
+
+async def list_user_posts(user_id: int) -> list[dict]:
+    """Return all posts for a given user, newest first."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute(
+            "SELECT id, short_id, text, created_at FROM user_posts WHERE user_id = ? ORDER BY id DESC",
+            (user_id,),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+
+async def delete_user_post(post_id: int, user_id: int) -> bool:
+    """Delete a post by its id, scoped to user_id. Returns True if deleted."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute(
+            "DELETE FROM user_posts WHERE id = ? AND user_id = ?",
+            (post_id, user_id),
+        )
+        await db.commit()
+        return cursor.rowcount > 0
 
 
 # ── forwarded_messages helpers ────────────────────────────────────────────────

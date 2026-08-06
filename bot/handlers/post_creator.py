@@ -36,9 +36,13 @@ from telegram.ext import (
     CallbackQueryHandler,
     filters,
 )
+from telegram.ext.filters import ChatType
 
-from bot.database.db import list_destinations
-from bot.utils.decorators import admin_only
+import re
+import secrets
+
+from bot.database.db import list_destinations, save_post, list_user_posts, delete_user_post
+from bot.utils.decorators import admin_only, admin_or_sudo
 import logging
 
 logger = logging.getLogger(__name__)
@@ -84,7 +88,7 @@ def _confirm_keyboard() -> InlineKeyboardMarkup:
 
 # ── Entry ─────────────────────────────────────────────────────────────────────
 
-@admin_only
+@admin_or_sudo
 async def newpost_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data[_DATA] = {}
     await update.message.reply_text(
@@ -277,6 +281,19 @@ async def confirm_post(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     if errors:
         result += "\n\nFailed:\n" + "\n".join(errors)
 
+    # Save post to DB so it appears in /myposts
+    if success:
+        user_id  = update.effective_user.id
+        short_id = secrets.token_hex(7)          # 14-char lowercase hex
+        await save_post(
+            user_id         = user_id,
+            short_id        = short_id,
+            text            = data.get("text") or None,
+            photo_file_id   = data.get("photo_file_id"),
+            sticker_file_id = data.get("sticker_file_id"),
+            buttons_raw     = data.get("buttons_raw") or None,
+        )
+
     try:
         await query.edit_message_reply_markup(reply_markup=None)
     except Exception:
@@ -317,11 +334,59 @@ async def cancel_post(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
     return ConversationHandler.END
 
 
+# ── /myposts ──────────────────────────────────────────────────────────────────
+
+@admin_or_sudo
+async def myposts_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.effective_user.id
+    posts   = await list_user_posts(user_id)
+
+    if not posts:
+        await update.message.reply_text("📭 You have no saved posts yet.\n\nUse /newpost to create one.")
+        return
+
+    bot_username = (await context.bot.get_me()).username
+    lines = ["📦 *My posts*\n"]
+    for i, p in enumerate(posts, 1):
+        preview = (p["text"] or "").strip().replace("*", "").replace("_", "")
+        preview = preview[:40] + ("…" if len(preview) > 40 else "")
+        label   = preview or "📎 media"
+        lines.append(
+            f"{i}\\. {p['short_id']}\n"
+            f"@{bot_username} {p['short_id']}\n"
+            f"/delete\\_{p['id']}  — _{label}_"
+        )
+
+    await update.message.reply_text(
+        "\n\n".join(lines),
+        parse_mode="MarkdownV2",
+    )
+
+
+# ── /delete_<id> ──────────────────────────────────────────────────────────────
+
+@admin_or_sudo
+async def delete_post_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    text = update.message.text or ""
+    m    = re.match(r"^/delete_(\d+)", text)
+    if not m:
+        return
+    post_id = int(m.group(1))
+    user_id = update.effective_user.id
+    deleted = await delete_user_post(post_id, user_id)
+    if deleted:
+        await update.message.reply_text(f"✅ Post #{post_id} deleted.")
+    else:
+        await update.message.reply_text(f"❌ Post #{post_id} not found (or not yours).")
+
+
 # ── ConversationHandler factory ───────────────────────────────────────────────
 
 def build_newpost_handler() -> ConversationHandler:
     return ConversationHandler(
-        entry_points=[CommandHandler("newpost", newpost_start)],
+        entry_points=[
+            MessageHandler(ChatType.PRIVATE & filters.Regex(r"^Create post$"), newpost_start),
+        ],
         states={
             MEDIA: [
                 MessageHandler(filters.PHOTO, step_photo),

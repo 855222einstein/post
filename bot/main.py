@@ -19,7 +19,13 @@ from bot.config import BOT_TOKEN
 from bot.database.db import init_db
 
 # Handlers
-from bot.handlers.start import start_handler, help_handler, privacy_handler
+from bot.handlers.start import (
+    start_handler,
+    help_handler,
+    privacy_handler,
+    profile_handler,
+    start_callback_handler,
+)
 from bot.handlers.admin import (
     myid_handler,
     addchat_handler,
@@ -28,7 +34,7 @@ from bot.handlers.admin import (
     broadcast_message_handler,
 )
 from bot.handlers.callbacks import forward_callback, cancel_callback
-from bot.handlers.post_creator import build_newpost_handler
+from bot.handlers.post_creator import build_newpost_handler, myposts_handler, delete_post_handler
 from bot.handlers.settings import (
     botsettings_handler,
     usersettings_handler,
@@ -77,15 +83,26 @@ def build_application() -> Application:
     app.add_handler(CommandHandler("addchat", addchat_handler))
     app.add_handler(CommandHandler("removechat", removechat_handler))
     app.add_handler(CommandHandler("listchats", listchats_handler))
+    app.add_handler(CommandHandler("myposts", myposts_handler))
+    app.add_handler(MessageHandler(filters.Regex(r"^/delete_\d+"), delete_post_handler))
     app.add_handler(CommandHandler("botsettings", botsettings_handler))
     app.add_handler(CommandHandler("usersettings", usersettings_handler))
     # /cancel aborts an in-progress Set operation
     app.add_handler(CommandHandler("cancel", cancel_settings_handler))
 
     # ── Inline-keyboard callbacks ──
+    app.add_handler(CallbackQueryHandler(start_callback_handler, pattern=r"^start:"))
     app.add_handler(CallbackQueryHandler(settings_callback, pattern=r"^(bs|us):"))
     app.add_handler(CallbackQueryHandler(forward_callback, pattern=r"^fwd:"))
     app.add_handler(CallbackQueryHandler(cancel_callback, pattern=r"^cancel$"))
+
+    # ── Keyboard text shortcuts (must come before broadcast handler) ──
+    app.add_handler(MessageHandler(
+        filters.ChatType.PRIVATE & filters.Regex(r"^My posts$"), myposts_handler
+    ))
+    app.add_handler(MessageHandler(
+        filters.ChatType.PRIVATE & filters.Regex(r"^Profile$"), profile_handler
+    ))
 
     # ── Auto-forward: channel posts from source channel ──
     app.add_handler(MessageHandler(filters.ChatType.CHANNEL, channel_post_handler))
